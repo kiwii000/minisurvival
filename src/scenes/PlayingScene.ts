@@ -48,7 +48,7 @@ export class PlayingScene extends Phaser.Scene {
 
 
   preload(): void {
-    this.load.svg(ASSET_IDS.player, 'assets/player-character.svg', { width: 24, height: 24 });
+    this.load.svg(ASSET_IDS.player, 'assets/characters/player-character.svg', { width: 24, height: 24 });
   }
 
   create(): void {
