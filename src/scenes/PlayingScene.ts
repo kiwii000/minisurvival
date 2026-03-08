@@ -46,6 +46,11 @@ export class PlayingScene extends Phaser.Scene {
     super('Playing');
   }
 
+
+  preload(): void {
+    this.load.svg(ASSET_IDS.player, 'assets/player-character.svg', { width: 24, height: 24 });
+  }
+
   create(): void {
     this.createTextures();
     this.bootstrapContext();
@@ -445,15 +450,16 @@ export class PlayingScene extends Phaser.Scene {
   }
 
   private createTextures(): void {
-    if (this.textures.exists(ASSET_IDS.player)) return;
     const g = this.make.graphics({ x: 0, y: 0, add: false });
 
-    g.clear();
-    g.fillStyle(0x000000, 0.2); g.fillEllipse(12, 19, 12, 5);
-    g.fillStyle(0x263245); g.fillRoundedRect(7, 14, 10, 8, 2);
-    g.fillStyle(0xeccdaf); g.fillCircle(12, 9, 5);
-    g.fillStyle(0x4e5c7a); g.fillRect(9, 16, 6, 6);
-    g.generateTexture(ASSET_IDS.player, 24, 24);
+    if (!this.textures.exists(ASSET_IDS.player)) {
+      g.clear();
+      g.fillStyle(0x000000, 0.2); g.fillEllipse(12, 19, 12, 5);
+      g.fillStyle(0x263245); g.fillRoundedRect(7, 14, 10, 8, 2);
+      g.fillStyle(0xeccdaf); g.fillCircle(12, 9, 5);
+      g.fillStyle(0x4e5c7a); g.fillRect(9, 16, 6, 6);
+      g.generateTexture(ASSET_IDS.player, 24, 24);
+    }
 
     g.clear();
     g.fillStyle(0x000000, 0.2); g.fillEllipse(12, 18, 12, 4);
