@@ -11,15 +11,16 @@ export const PLAYER_SPEED = 150;
 export const INTERACT_RANGE = 36;
 
 export const AUTOSAVE_SECONDS = 45;
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export const PALETTE = {
-  meadowA: 0x8fbf8f,
-  meadowB: 0x9bc997,
-  forestA: 0x6c966c,
-  forestB: 0x769f73,
-  duskTint: 0x8e7ca6,
-  nightTint: 0x1e2438,
+  meadowA: 0x86b886,
+  meadowB: 0x7db07d,
+  forestA: 0x648f64,
+  forestB: 0x577f57,
+  dirtPatch: 0x6a6951,
+  duskTint: 0x7f6f92,
+  nightTint: 0x1a2233,
   hudText: '#ecf1f8',
   promptText: '#ffe4a8'
 } as const;

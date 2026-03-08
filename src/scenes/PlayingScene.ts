@@ -8,6 +8,7 @@ import {
   NIGHT_LENGTH,
   PALETTE,
   PLAYER_SPEED,
+  SAVE_VERSION,
   START_SEED,
   TILE_SIZE,
   WORLD_H,
@@ -58,6 +59,7 @@ export class PlayingScene extends Phaser.Scene {
 
     this.cameras.main.setBounds(0, 0, WORLD_W * TILE_SIZE, WORLD_H * TILE_SIZE);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+    this.cameras.main.setZoom(1.2);
 
     this.dayOverlay = this.add
       .rectangle(0, 0, WORLD_W * TILE_SIZE, WORLD_H * TILE_SIZE, PALETTE.nightTint, 0)
@@ -93,7 +95,7 @@ export class PlayingScene extends Phaser.Scene {
 
   private bootstrapContext(): void {
     const loaded = loadSlot(1);
-    if (!loaded) {
+    if (!loaded || loaded.version !== SAVE_VERSION) {
       this.newGame(START_SEED);
       return;
     }
@@ -246,13 +248,9 @@ export class PlayingScene extends Phaser.Scene {
       this.scene.launch('GameOver');
     }
 
-    if (gameContext.phase === 'night') {
-      this.dayOverlay.setFillStyle(PALETTE.nightTint, 0.45);
-    } else if (gameContext.phase === 'dusk') {
-      this.dayOverlay.setFillStyle(PALETTE.duskTint, 0.25);
-    } else {
-      this.dayOverlay.setFillStyle(PALETTE.nightTint, 0);
-    }
+    if (gameContext.phase === 'night') this.dayOverlay.setFillStyle(PALETTE.nightTint, 0.40);
+    else if (gameContext.phase === 'dusk') this.dayOverlay.setFillStyle(PALETTE.duskTint, 0.18);
+    else this.dayOverlay.setFillStyle(PALETTE.nightTint, 0);
   }
 
   private startInteract(): void {
@@ -318,7 +316,7 @@ export class PlayingScene extends Phaser.Scene {
     if (gameContext.inventory.remove('campfire_kit', 1)) {
       const id = `camp_${Date.now()}`;
       gameContext.structures.push({ id, type: 'campfire', x: this.player.x + 20, y: this.player.y, fuel: 60 });
-      const sprite = this.add.image(this.player.x + 20, this.player.y, ASSET_IDS.campfire).setDepth(35);
+      const sprite = this.add.image(this.player.x + 20, this.player.y, ASSET_IDS.campfire).setDepth(35).setScale(1.1);
       this.structureGraphics.set(id, sprite);
       return;
     }
@@ -327,7 +325,7 @@ export class PlayingScene extends Phaser.Scene {
       const id = `science_${Date.now()}`;
       gameContext.structures.push({ id, type: 'science', x: this.player.x + 20, y: this.player.y, fuel: 0 });
       gameContext.scienceBuilt = true;
-      const sprite = this.add.image(this.player.x + 20, this.player.y, ASSET_IDS.science).setDepth(35);
+      const sprite = this.add.image(this.player.x + 20, this.player.y, ASSET_IDS.science).setDepth(35).setScale(1.1);
       this.structureGraphics.set(id, sprite);
     }
   }
@@ -344,7 +342,7 @@ export class PlayingScene extends Phaser.Scene {
 
   private persist(status: 'alive' | 'dead' = 'alive'): void {
     saveSlot(1, {
-      version: 1,
+      version: SAVE_VERSION,
       metadata: { day: gameContext.day, playtime: gameContext.playtime, status },
       worldSeed: gameContext.seed,
       timeOfDay: gameContext.timeOfDay,
@@ -362,8 +360,9 @@ export class PlayingScene extends Phaser.Scene {
   }
 
   private tryLoad(): void {
-    if (!loadSlot(1)) {
-      this.prompt.setText('No save in slot 1.');
+    const loaded = loadSlot(1);
+    if (!loaded || loaded.version !== SAVE_VERSION) {
+      this.prompt.setText('No compatible save in slot 1.');
       return;
     }
     this.refreshScene();
@@ -389,13 +388,20 @@ export class PlayingScene extends Phaser.Scene {
 
   private drawTerrain(): void {
     this.worldGraphics.clear();
-    const rng = new RNG(gameContext.seed);
     for (let y = 0; y < WORLD_H; y += 1) {
       for (let x = 0; x < WORLD_W; x += 1) {
-        const noise = rng.next();
-        const color = noise > 0.52 ? PALETTE.meadowA : noise > 0.3 ? PALETTE.meadowB : noise > 0.14 ? PALETTE.forestA : PALETTE.forestB;
-        this.worldGraphics.fillStyle(color, 1);
-        this.worldGraphics.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE - 1, TILE_SIZE - 1);
+        const biomeNoise = this.hash2D(x >> 2, y >> 2, gameContext.seed + 101);
+        const detailNoise = this.hash2D(x >> 1, y >> 1, gameContext.seed + 389);
+        const isMeadow = biomeNoise > 0.42;
+        const base = isMeadow ? (detailNoise > 0.52 ? PALETTE.meadowA : PALETTE.meadowB) : (detailNoise > 0.52 ? PALETTE.forestA : PALETTE.forestB);
+        this.worldGraphics.fillStyle(base, 1);
+        this.worldGraphics.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+
+        const dirtRoll = this.hash2D(x, y, gameContext.seed + 777);
+        if (dirtRoll > 0.975) {
+          this.worldGraphics.fillStyle(PALETTE.dirtPatch, 0.20);
+          this.worldGraphics.fillRect(x * TILE_SIZE + 6, y * TILE_SIZE + 6, 12, 12);
+        }
       }
     }
   }
@@ -409,18 +415,18 @@ export class PlayingScene extends Phaser.Scene {
     this.enemyGraphics.clear();
 
     for (const node of gameContext.nodes) {
-      const sprite = this.add.image(node.x, node.y, this.nodeAssetId(node.type)).setDepth(30).setVisible(node.available);
+      const sprite = this.add.image(node.x, node.y, this.nodeAssetId(node.type)).setDepth(30).setScale(1.15).setVisible(node.available);
       this.nodeGraphics.set(node.id, sprite);
     }
 
     for (const structure of gameContext.structures) {
       const texture = structure.type === 'campfire' ? ASSET_IDS.campfire : ASSET_IDS.science;
-      const sprite = this.add.image(structure.x, structure.y, texture).setDepth(35);
+      const sprite = this.add.image(structure.x, structure.y, texture).setDepth(35).setScale(1.1);
       this.structureGraphics.set(structure.id, sprite);
     }
 
     for (const enemy of gameContext.enemies) {
-      const sprite = this.add.image(enemy.x, enemy.y, ASSET_IDS.enemy).setDepth(40);
+      const sprite = this.add.image(enemy.x, enemy.y, ASSET_IDS.enemy).setDepth(40).setScale(1.12);
       this.enemyGraphics.set(enemy.id, sprite);
     }
   }
@@ -433,60 +439,67 @@ export class PlayingScene extends Phaser.Scene {
     return ASSET_IDS.grassTuft;
   }
 
+  private hash2D(x: number, y: number, seed: number): number {
+    const n = Math.sin((x * 127.1 + y * 311.7 + seed * 0.113) * 0.0174533) * 43758.5453;
+    return n - Math.floor(n);
+  }
+
   private createTextures(): void {
     if (this.textures.exists(ASSET_IDS.player)) return;
-
     const g = this.make.graphics({ x: 0, y: 0, add: false });
 
     g.clear();
-    g.fillStyle(0x3d2f24); g.fillRoundedRect(9, 14, 6, 8, 2);
-    g.fillStyle(0xf7dfc8); g.fillCircle(12, 9, 5);
-    g.fillStyle(0x5d90d5); g.fillRoundedRect(7, 14, 10, 8, 2);
+    g.fillStyle(0x000000, 0.2); g.fillEllipse(12, 19, 12, 5);
+    g.fillStyle(0x263245); g.fillRoundedRect(7, 14, 10, 8, 2);
+    g.fillStyle(0xeccdaf); g.fillCircle(12, 9, 5);
+    g.fillStyle(0x4e5c7a); g.fillRect(9, 16, 6, 6);
     g.generateTexture(ASSET_IDS.player, 24, 24);
 
     g.clear();
-    g.fillStyle(0x8b2b2b); g.fillCircle(12, 12, 8);
-    g.fillStyle(0xc64c4c); g.fillCircle(12, 12, 5);
-    g.fillStyle(0x2d1313); g.fillCircle(8, 10, 1.4); g.fillCircle(16, 10, 1.4);
+    g.fillStyle(0x000000, 0.2); g.fillEllipse(12, 18, 12, 4);
+    g.fillStyle(0x6e3a2f); g.fillEllipse(12, 12, 16, 13);
+    g.fillStyle(0xaf5a49); g.fillEllipse(12, 12, 11, 9);
+    g.fillStyle(0x281816); g.fillCircle(9, 10, 1.3); g.fillCircle(15, 10, 1.3);
     g.generateTexture(ASSET_IDS.enemy, 24, 24);
 
     g.clear();
-    g.fillStyle(0x6d4c2d); g.fillRect(10, 12, 4, 10);
-    g.fillStyle(0x3f7b3f); g.fillCircle(12, 9, 8);
-    g.fillStyle(0x2f6331); g.fillCircle(9, 8, 4); g.fillCircle(15, 8, 4);
+    g.fillStyle(0x6f4e2f); g.fillRect(10, 11, 4, 10);
+    g.fillStyle(0x3f7d3c); g.fillCircle(12, 9, 8);
+    g.fillStyle(0x336632); g.fillCircle(8, 10, 4); g.fillCircle(16, 10, 4);
     g.generateTexture(ASSET_IDS.tree, 24, 24);
 
     g.clear();
-    g.fillStyle(0x8a8f96); g.fillRoundedRect(4, 8, 16, 12, 4);
-    g.fillStyle(0xa4a9af); g.fillRoundedRect(7, 10, 6, 3, 2);
+    g.fillStyle(0x828a92); g.fillRoundedRect(4, 8, 16, 12, 4);
+    g.fillStyle(0xa8afb6); g.fillRoundedRect(8, 10, 6, 3, 2);
+    g.fillStyle(0x6f767d); g.fillRoundedRect(12, 13, 5, 2, 2);
     g.generateTexture(ASSET_IDS.boulder, 24, 24);
 
     g.clear();
-    g.fillStyle(0x4d8b3f); g.fillCircle(12, 15, 6);
-    g.fillStyle(0x5aa049); g.fillCircle(8, 13, 4); g.fillCircle(16, 13, 4);
-    g.fillStyle(0x943a7a); g.fillCircle(9, 14, 1.6); g.fillCircle(14, 16, 1.6); g.fillCircle(16, 12, 1.6);
+    g.fillStyle(0x4f8f45); g.fillCircle(12, 15, 6);
+    g.fillStyle(0x5ea250); g.fillCircle(8, 13, 4); g.fillCircle(16, 13, 4);
+    g.fillStyle(0x8f3d70); g.fillCircle(9, 14, 1.6); g.fillCircle(14, 16, 1.6); g.fillCircle(16, 12, 1.6);
     g.generateTexture(ASSET_IDS.berryBush, 24, 24);
 
     g.clear();
-    g.fillStyle(0x5f9f46); g.fillTriangle(12, 9, 6, 20, 18, 20);
-    g.fillStyle(0x497b38); g.fillTriangle(12, 11, 8, 20, 16, 20);
+    g.fillStyle(0x6da94e); g.fillTriangle(12, 9, 6, 20, 18, 20);
+    g.fillStyle(0x54853e); g.fillTriangle(12, 11, 8, 20, 16, 20);
     g.generateTexture(ASSET_IDS.sapling, 24, 24);
 
     g.clear();
-    g.fillStyle(0x5d8d42); g.fillRect(10, 14, 4, 8);
-    g.fillStyle(0x82c85f); g.fillTriangle(12, 8, 6, 17, 18, 17);
+    g.fillStyle(0x57893e); g.fillRect(10, 14, 4, 8);
+    g.fillStyle(0x8bcb62); g.fillTriangle(12, 8, 6, 17, 18, 17);
     g.generateTexture(ASSET_IDS.grassTuft, 24, 24);
 
     g.clear();
-    g.fillStyle(0x66513c); g.fillRoundedRect(7, 15, 10, 6, 2);
-    g.fillStyle(0xffa62b); g.fillTriangle(12, 7, 7, 16, 17, 16);
-    g.fillStyle(0xffd26a); g.fillTriangle(12, 9, 9, 16, 15, 16);
+    g.fillStyle(0x6e5237); g.fillRoundedRect(7, 15, 10, 6, 2);
+    g.fillStyle(0xffa23a); g.fillTriangle(12, 7, 7, 16, 17, 16);
+    g.fillStyle(0xffd887); g.fillTriangle(12, 9, 9, 16, 15, 16);
     g.generateTexture(ASSET_IDS.campfire, 24, 24);
 
     g.clear();
-    g.fillStyle(0x8094b0); g.fillRoundedRect(6, 9, 12, 12, 2);
+    g.fillStyle(0x7e95ad); g.fillRoundedRect(6, 9, 12, 12, 2);
     g.fillStyle(0x4fd3ff); g.fillRect(10, 5, 4, 4);
-    g.fillStyle(0x36455d); g.fillRect(5, 20, 14, 2);
+    g.fillStyle(0x2f3f55); g.fillRect(5, 20, 14, 2);
     g.generateTexture(ASSET_IDS.science, 24, 24);
 
     g.destroy();
