@@ -2,7 +2,7 @@
 
 This folder stores character sprites used by the game runtime.
 
-- `player-character.png`: primary player sprite asset.
+- `player-character.PNG`: primary player sprite asset.
 
 `PlayingScene` loads this file from:
-`assets/characters/player-character.png`
+`assets/characters/player-character.PNG`

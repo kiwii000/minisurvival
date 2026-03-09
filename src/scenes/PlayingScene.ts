@@ -24,8 +24,10 @@ import { loadSlot, saveSlot } from '../systems/save';
 import { decayStats } from '../systems/stats';
 import { generateWorld } from '../systems/worldgen';
 
+const PLAYER_SPRITESHEET_KEY = 'player_spritesheet';
+
 export class PlayingScene extends Phaser.Scene {
-  private player!: Phaser.GameObjects.Image;
+  private player!: Phaser.GameObjects.Sprite;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private nodeGraphics = new Map<string, Phaser.GameObjects.Image>();
@@ -48,11 +50,12 @@ export class PlayingScene extends Phaser.Scene {
 
 
   preload(): void {
-    this.load.image(ASSET_IDS.player, 'assets/characters/player-character.png');
+    this.load.spritesheet(PLAYER_SPRITESHEET_KEY, 'assets/characters/player-character.PNG', { frameWidth: 32, frameHeight: 32 });
   }
 
   create(): void {
     this.createTextures();
+    this.createPlayerAnimations();
     this.bootstrapContext();
 
     this.worldGraphics = this.add.graphics();
@@ -60,7 +63,8 @@ export class PlayingScene extends Phaser.Scene {
     this.spawnWorldObjects();
 
     const spawn = this.playerSpawn();
-    this.player = this.add.image(spawn.x, spawn.y, ASSET_IDS.player).setDepth(50);
+    this.player = this.add.sprite(spawn.x, spawn.y, PLAYER_SPRITESHEET_KEY, 0).setDepth(50).setOrigin(0.5, 1);
+    this.player.play('player_idle');
 
     this.cameras.main.setBounds(0, 0, WORLD_W * TILE_SIZE, WORLD_H * TILE_SIZE);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
@@ -162,6 +166,13 @@ export class PlayingScene extends Phaser.Scene {
     this.player.x = Phaser.Math.Clamp(this.player.x, 0, WORLD_W * TILE_SIZE);
     this.player.y = Phaser.Math.Clamp(this.player.y, 0, WORLD_H * TILE_SIZE);
     if (moving && this.actionTarget) this.cancelAction('Interrupted by movement');
+
+    if (moving) {
+      this.player.play('player_run', true);
+      this.player.setFlipX(vx < 0);
+    } else if (!this.actionTarget) {
+      this.player.play('player_idle', true);
+    }
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.startInteract();
     if (Phaser.Input.Keyboard.JustDown(this.keys.F)) this.attack();
@@ -449,16 +460,30 @@ export class PlayingScene extends Phaser.Scene {
     return n - Math.floor(n);
   }
 
+
+
+  private createPlayerAnimations(): void {
+    if (!this.anims.exists('player_idle')) {
+      this.anims.create({ key: 'player_idle', frames: [{ key: PLAYER_SPRITESHEET_KEY, frame: 0 }], frameRate: 1, repeat: -1 });
+    }
+    if (!this.anims.exists('player_run')) {
+      this.anims.create({ key: 'player_run', frames: [{ key: PLAYER_SPRITESHEET_KEY, frame: 0 }], frameRate: 10, repeat: -1 });
+    }
+    if (!this.anims.exists('player_jump')) {
+      this.anims.create({ key: 'player_jump', frames: [{ key: PLAYER_SPRITESHEET_KEY, frame: 0 }], frameRate: 1, repeat: -1 });
+    }
+  }
+
   private createTextures(): void {
     const g = this.make.graphics({ x: 0, y: 0, add: false });
 
-    if (!this.textures.exists(ASSET_IDS.player)) {
+    if (!this.textures.exists(PLAYER_SPRITESHEET_KEY)) {
       g.clear();
-      g.fillStyle(0x000000, 0.2); g.fillEllipse(12, 19, 12, 5);
-      g.fillStyle(0x263245); g.fillRoundedRect(7, 14, 10, 8, 2);
-      g.fillStyle(0xeccdaf); g.fillCircle(12, 9, 5);
-      g.fillStyle(0x4e5c7a); g.fillRect(9, 16, 6, 6);
-      g.generateTexture(ASSET_IDS.player, 24, 24);
+      g.fillStyle(0x000000, 0.2); g.fillEllipse(16, 28, 16, 6);
+      g.fillStyle(0x263245); g.fillRoundedRect(11, 18, 10, 10, 2);
+      g.fillStyle(0xeccdaf); g.fillCircle(16, 12, 6);
+      g.fillStyle(0x4e5c7a); g.fillRect(12, 20, 8, 8);
+      g.generateTexture(PLAYER_SPRITESHEET_KEY, 32, 32);
     }
 
     g.clear();
